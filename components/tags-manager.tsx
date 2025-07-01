@@ -341,8 +341,8 @@ export function TagsManager({ selectedCompanies = [], onTagsUpdated }: TagsManag
               <Plus className="w-4 h-4 mr-2" />
               Criar Primeira Etiqueta
             </Button>
-          </div>
-        </CardContent>
+          </CardContent>
+        </Card>
       )}
     </div>
   )
