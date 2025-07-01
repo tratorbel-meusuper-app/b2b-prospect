@@ -47,7 +47,7 @@ export function SearchForm({ onSearchResults, loading, setLoading }: SearchFormP
       excluir_empresas_visualizadas: false,
       excluir_email_contab: false,
     },
-    limite: 1000,
+    limite: 100,
     pagina: 1,
   })
 
@@ -66,7 +66,9 @@ export function SearchForm({ onSearchResults, loading, setLoading }: SearchFormP
 
     try {
       const searchFilters = { ...filters, pagina: page }
-      const response = await fetch("https://api.cnpjs.dev/v1/office", {
+      
+      // Fazer requisição direta para a API externa
+      const response = await fetch("https://webhook.meusuper.app/webhook/379f44b4-30cf-4f30-9a25-8f097509a413", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -81,68 +83,40 @@ export function SearchForm({ onSearchResults, loading, setLoading }: SearchFormP
       }
 
       const data = await response.json()
-      console.log("🔍 API response type:", typeof data)
-      console.log("🔍 API response is array:", Array.isArray(data))
-      console.log("🔍 API response length:", Array.isArray(data) ? data.length : "not array")
-      console.log("🔍 API response sample:", JSON.stringify(data).substring(0, 500))
+      console.log("🔍 API response:", data)
 
-      // Extract companies from the response
+      // Processar a resposta da API
       let companies = []
       let total = 0
 
-      if (data && typeof data === "object") {
-        console.log("🔍 Response is object with keys:", Object.keys(data))
-
-        // Check for different possible structures
-        if (data.cnpjs && Array.isArray(data.cnpjs)) {
-          console.log("🔍 Found cnpjs array with length:", data.cnpjs.length)
-          companies = data.cnpjs.map((company: any) => ({
+      if (Array.isArray(data) && data.length > 0) {
+        const responseData = data[0] // Pegar o primeiro item do array
+        total = responseData.total || 0
+        
+        if (responseData.cnpjs && Array.isArray(responseData.cnpjs)) {
+          companies = responseData.cnpjs.map((company: any) => ({
             cnpj: company.cnpj,
             razao_social: company.razao_social,
-            nome_fantasia: company.nome_fantasia,
-            situacao_cadastral: company.situacao_cadastral?.situacao_atual || company.situacao_cadastral,
-            motivo_situacao: company.situacao_cadastral?.motivo,
-            uf: company.endereco?.uf,
-            municipio: company.endereco?.municipio,
-            bairro: company.endereco?.bairro,
-            logradouro: company.endereco?.logradouro,
-            numero: company.endereco?.numero,
-            cep: company.endereco?.cep,
-            telefone: company.telefone,
-            email: company.email,
-            atividade_principal: company.atividade_principal?.descricao,
-            cnae_principal: company.atividade_principal?.codigo,
-            capital_social: company.capital_social,
-            porte: company.porte,
-            natureza_juridica: company.natureza_juridica?.descricao,
-            data_abertura: company.data_abertura,
+            nome_fantasia: company.nome_fantasia || "",
+            situacao_cadastral: company.situacao_cadastral?.situacao_atual || "N/A",
+            motivo_situacao: company.situacao_cadastral?.motivo || "",
+            data_situacao: company.situacao_cadastral?.data || "",
+            uf: company.uf || "",
+            municipio: company.municipio || "",
+            bairro: company.bairro || "",
+            logradouro: company.logradouro || "",
+            numero: company.numero || "",
+            cep: company.cep || "",
+            telefone: company.telefone || "",
+            email: company.email || "",
+            atividade_principal: company.atividade_principal || "",
+            cnae_principal: company.cnae_principal || "",
+            capital_social: company.capital_social || 0,
+            porte: company.porte || "",
+            natureza_juridica: company.natureza_juridica || "",
+            data_abertura: company.data_abertura || "",
             enrichment_status: "none",
           }))
-          total = data.total || companies.length
-        } else if (data.empresas && Array.isArray(data.empresas)) {
-          companies = data.empresas
-          total = data.total || companies.length
-        } else if (data.companies && Array.isArray(data.companies)) {
-          companies = data.companies
-          total = data.total || companies.length
-        } else if (Array.isArray(data)) {
-          companies = data
-          total = companies.length
-        } else {
-          console.log("🔍 Found total but no leads array, checking all properties")
-          Object.keys(data).forEach((key) => {
-            console.log(
-              `🔍 Property '${key}':`,
-              typeof data[key],
-              Array.isArray(data[key]) ? `(array of ${data[key].length})` : "",
-            )
-          })
-
-          if (data.total) {
-            total = data.total
-          }
-
-          console.log("🔍 No leads found but response seems valid, creating empty result")
         }
       }
 
@@ -242,7 +216,7 @@ export function SearchForm({ onSearchResults, loading, setLoading }: SearchFormP
         excluir_empresas_visualizadas: false,
         excluir_email_contab: false,
       },
-      limite: 1000,
+      limite: 100,
       pagina: 1,
     })
     setTempInputs({
@@ -562,10 +536,10 @@ export function SearchForm({ onSearchResults, loading, setLoading }: SearchFormP
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="50">50</SelectItem>
                 <SelectItem value="100">100</SelectItem>
+                <SelectItem value="200">200</SelectItem>
                 <SelectItem value="500">500</SelectItem>
-                <SelectItem value="1000">1000</SelectItem>
-                <SelectItem value="2000">2000</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -588,12 +562,24 @@ export function SearchForm({ onSearchResults, loading, setLoading }: SearchFormP
       </Card>
 
       {/* Modals */}
-      <SaveSearchModal open={showSaveModal} onOpenChange={setShowSaveModal} filters={filters} />
+      <SaveSearchModal 
+        open={showSaveModal} 
+        onOpenChange={setShowSaveModal} 
+        filters={filters} 
+        activeFiltersCount={Object.keys(filters).filter(key => {
+          const value = filters[key as keyof typeof filters]
+          if (Array.isArray(value)) return value.length > 0
+          if (typeof value === 'object' && value !== null) {
+            return Object.values(value).some(v => v !== 0 && v !== false && v !== "")
+          }
+          return false
+        }).length}
+      />
 
       <ImportSearchModal
         open={showImportModal}
         onOpenChange={setShowImportModal}
-        onImport={(importedFilters) => {
+        onImportSearch={(importedFilters) => {
           setFilters(importedFilters)
           toast.success("Busca importada com sucesso!")
         }}
