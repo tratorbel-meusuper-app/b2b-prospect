@@ -9,8 +9,6 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { EnrichmentModal } from "./enrichment-modal"
-import { BulkEnrichmentModal } from "./bulk-enrichment-modal"
 import { toast } from "sonner"
 import {
   Search,
@@ -38,10 +36,6 @@ export function LeadsTable({ searchResult, loading, onPageChange, onMoveToKanban
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set())
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
-  const [showEnrichmentModal, setShowEnrichmentModal] = useState(false)
-  const [selectedLead, setSelectedLead] = useState<any>(null)
-  const [showBulkEnrichmentModal, setShowBulkEnrichmentModal] = useState(false)
-  const [setLoading] = useState<boolean>(false) // Declare setLoading variable
 
   console.log("🔍 LeadsTable received searchResult:", searchResult)
 
@@ -83,10 +77,9 @@ export function LeadsTable({ searchResult, loading, onPageChange, onMoveToKanban
 
     const matchesStatus =
       statusFilter === "all" ||
-      (statusFilter === "enriched" && lead.enrichment_status !== "none") ||
-      (statusFilter === "not_enriched" && (!lead.enrichment_status || lead.enrichment_status === "none")) ||
       (statusFilter === "ativa" && lead.situacao_cadastral === "ATIVA") ||
-      (statusFilter === "baixada" && lead.situacao_cadastral === "BAIXADA")
+      (statusFilter === "baixada" && lead.situacao_cadastral === "BAIXADA") ||
+      (statusFilter === "inapta" && lead.situacao_cadastral === "INAPTA")
 
     return matchesSearch && matchesStatus
   })
@@ -109,19 +102,6 @@ export function LeadsTable({ searchResult, loading, onPageChange, onMoveToKanban
     setSelectedLeads(newSelected)
   }
 
-  const handleBulkEnrichment = () => {
-    if (selectedLeads.size === 0) {
-      toast.error("Selecione pelo menos uma empresa para enriquecer")
-      return
-    }
-    setShowBulkEnrichmentModal(true)
-  }
-
-  const handleEnrichLead = (lead: any) => {
-    setSelectedLead(lead)
-    setShowEnrichmentModal(true)
-  }
-
   const handleMoveToKanban = () => {
     if (selectedLeads.size === 0) {
       toast.error("Selecione pelo menos uma empresa para mover")
@@ -135,7 +115,17 @@ export function LeadsTable({ searchResult, loading, onPageChange, onMoveToKanban
   }
 
   const handleExportLeads = () => {
-    toast.info("Exportação de leads em desenvolvimento")
+    const dataStr = JSON.stringify(filteredLeads, null, 2)
+    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr)
+    
+    const exportFileDefaultName = 'leads.json'
+    
+    const linkElement = document.createElement('a')
+    linkElement.setAttribute('href', dataUri)
+    linkElement.setAttribute('download', exportFileDefaultName)
+    linkElement.click()
+    
+    toast.success("Leads exportados com sucesso!")
   }
 
   const formatCNPJ = (cnpj: string) => {
@@ -149,6 +139,15 @@ export function LeadsTable({ searchResult, loading, onPageChange, onMoveToKanban
       style: "currency",
       currency: "BRL",
     }).format(value)
+  }
+
+  const formatDate = (dateString: string) => {
+    if (!dateString) return "N/A"
+    try {
+      return new Date(dateString).toLocaleDateString("pt-BR")
+    } catch {
+      return dateString
+    }
   }
 
   // Show message if we have total but no leads data
@@ -178,20 +177,6 @@ export function LeadsTable({ searchResult, loading, onPageChange, onMoveToKanban
     )
   }
 
-  const handlePageChange = async (page: number) => {
-    if (searchResult.searchFunction) {
-      setLoading(true)
-      try {
-        await searchResult.searchFunction(page)
-      } catch (error) {
-        console.error("Error changing page:", error)
-        toast.error("Erro ao carregar página")
-      } finally {
-        setLoading(false)
-      }
-    }
-  }
-
   return (
     <div className="space-y-4">
       <Card>
@@ -205,13 +190,9 @@ export function LeadsTable({ searchResult, loading, onPageChange, onMoveToKanban
             <div className="flex items-center gap-2">
               {selectedLeads.size > 0 && (
                 <>
-                  <Button variant="outline" size="sm" onClick={handleBulkEnrichment}>
-                    <Sparkles className="w-4 h-4 mr-1" />
-                    Enriquecer ({selectedLeads.size})
-                  </Button>
                   <Button variant="outline" size="sm" onClick={handleMoveToKanban}>
                     <ArrowRight className="w-4 h-4 mr-1" />
-                    Mover para Kanban
+                    Mover para Kanban ({selectedLeads.size})
                   </Button>
                 </>
               )}
@@ -250,8 +231,7 @@ export function LeadsTable({ searchResult, loading, onPageChange, onMoveToKanban
                 <SelectItem value="all">Todas as empresas</SelectItem>
                 <SelectItem value="ativa">Apenas ativas</SelectItem>
                 <SelectItem value="baixada">Apenas baixadas</SelectItem>
-                <SelectItem value="enriched">Apenas enriquecidas</SelectItem>
-                <SelectItem value="not_enriched">Não enriquecidas</SelectItem>
+                <SelectItem value="inapta">Apenas inaptas</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -269,10 +249,10 @@ export function LeadsTable({ searchResult, loading, onPageChange, onMoveToKanban
                   </TableHead>
                   <TableHead>Empresa</TableHead>
                   <TableHead>CNPJ</TableHead>
+                  <TableHead>Situação</TableHead>
                   <TableHead>Localização</TableHead>
                   <TableHead>Atividade</TableHead>
                   <TableHead>Capital Social</TableHead>
-                  <TableHead>Status</TableHead>
                   <TableHead className="w-12"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -333,6 +313,28 @@ export function LeadsTable({ searchResult, loading, onPageChange, onMoveToKanban
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1">
+                          <Badge
+                            variant={lead.situacao_cadastral === "ATIVA" ? "default" : "secondary"}
+                            className="text-xs"
+                          >
+                            {lead.situacao_cadastral || "N/A"}
+                          </Badge>
+                          {lead.motivo_situacao && (
+                            <div className="text-xs text-gray-500 mt-1" title={lead.motivo_situacao}>
+                              {lead.motivo_situacao.length > 20
+                                ? `${lead.motivo_situacao.substring(0, 20)}...`
+                                : lead.motivo_situacao}
+                            </div>
+                          )}
+                          {lead.data_situacao && (
+                            <div className="text-xs text-gray-500">
+                              {formatDate(lead.data_situacao)}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
                           <div className="flex items-center gap-1 text-sm">
                             <MapPin className="w-3 h-3" />
                             {lead.municipio || "N/A"}, {lead.uf || "N/A"}
@@ -359,29 +361,6 @@ export function LeadsTable({ searchResult, loading, onPageChange, onMoveToKanban
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="space-y-1">
-                          <Badge
-                            variant={lead.situacao_cadastral === "ATIVA" ? "default" : "secondary"}
-                            className="text-xs"
-                          >
-                            {lead.situacao_cadastral || "N/A"}
-                          </Badge>
-                          {lead.enrichment_status && lead.enrichment_status !== "none" && (
-                            <Badge variant="outline" className="text-xs">
-                              <Sparkles className="w-3 h-3 mr-1" />
-                              Enriquecida
-                            </Badge>
-                          )}
-                          {lead.motivo_situacao && (
-                            <div className="text-xs text-gray-500 mt-1" title={lead.motivo_situacao}>
-                              {lead.motivo_situacao.length > 20
-                                ? `${lead.motivo_situacao.substring(0, 20)}...`
-                                : lead.motivo_situacao}
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="sm">
@@ -389,10 +368,6 @@ export function LeadsTable({ searchResult, loading, onPageChange, onMoveToKanban
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleEnrichLead(lead)}>
-                              <Sparkles className="w-4 h-4 mr-2" />
-                              Enriquecer
-                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => onMoveToKanban?.([lead])}>
                               <ArrowRight className="w-4 h-4 mr-2" />
                               Mover para Kanban
@@ -417,7 +392,7 @@ export function LeadsTable({ searchResult, loading, onPageChange, onMoveToKanban
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => handlePageChange(searchResult.page - 1)}
+                  onClick={() => onPageChange(searchResult.page - 1)}
                   disabled={searchResult.page <= 1 || loading}
                 >
                   <ChevronLeft className="w-4 h-4" />
@@ -426,7 +401,7 @@ export function LeadsTable({ searchResult, loading, onPageChange, onMoveToKanban
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => handlePageChange(searchResult.page + 1)}
+                  onClick={() => onPageChange(searchResult.page + 1)}
                   disabled={!searchResult.hasMore || loading}
                 >
                   Próxima
@@ -437,27 +412,6 @@ export function LeadsTable({ searchResult, loading, onPageChange, onMoveToKanban
           )}
         </CardContent>
       </Card>
-
-      {/* Modals */}
-      <BulkEnrichmentModal
-        open={showBulkEnrichmentModal}
-        onOpenChange={setShowBulkEnrichmentModal}
-        selectedLeads={filteredLeads.filter((lead: any) => selectedLeads.has(lead.cnpj))}
-        onComplete={() => {
-          setSelectedLeads(new Set())
-          setShowBulkEnrichmentModal(false)
-        }}
-      />
-
-      <EnrichmentModal
-        open={showEnrichmentModal}
-        onOpenChange={setShowEnrichmentModal}
-        lead={selectedLead}
-        onComplete={() => {
-          setShowEnrichmentModal(false)
-          setSelectedLead(null)
-        }}
-      />
     </div>
   )
 }

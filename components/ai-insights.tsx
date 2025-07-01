@@ -9,19 +9,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Brain, TrendingUp, Target, Clock, DollarSign, Users, BarChart3 } from "lucide-react"
 
 interface AIInsightsProps {
-  companies: any[]
+  leads: any[]
 }
 
-export function AIInsights({ companies }: AIInsightsProps) {
+export function AIInsights({ leads }: AIInsightsProps) {
   const [insights, setInsights] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [selectedCompany, setSelectedCompany] = useState<any>(null)
 
   useEffect(() => {
-    if (companies.length > 0) {
+    if (leads.length > 0) {
       generateInsights()
     }
-  }, [companies])
+  }, [leads])
 
   const generateInsights = async () => {
     setLoading(true)
@@ -29,17 +29,23 @@ export function AIInsights({ companies }: AIInsightsProps) {
       // Simulate AI analysis
       await new Promise((resolve) => setTimeout(resolve, 2000))
 
-      const totalCompanies = companies.length
-      const activeCompanies = companies.filter((c) => c.situacao_cadastral?.situacao_atual === "ATIVA").length
-      const highScoreCompanies = companies.filter((c) => (c.ai_score || 0) > 70).length
-      const avgScore = companies.reduce((sum, c) => sum + (c.ai_score || 0), 0) / totalCompanies
+      const totalCompanies = leads.length
+      const activeCompanies = leads.filter((c) => c.situacao_cadastral === "ATIVA").length
+      const inactiveCompanies = leads.filter((c) => c.situacao_cadastral === "BAIXADA").length
+      const inaptCompanies = leads.filter((c) => c.situacao_cadastral === "INAPTA").length
+      
+      // Calculate AI score based on company status
+      const avgScore = Math.round((activeCompanies / totalCompanies) * 100)
+      const highScoreCompanies = Math.round(activeCompanies * 0.7) // 70% of active companies are high score
 
       const insights = {
         overview: {
           totalCompanies,
           activeCompanies,
+          inactiveCompanies,
+          inaptCompanies,
           highScoreCompanies,
-          avgScore: Math.round(avgScore),
+          avgScore,
           conversionPrediction: Math.round(highScoreCompanies * 0.15), // 15% conversion rate
           estimatedRevenue: highScoreCompanies * 25000, // R$ 25k average deal
         },
@@ -52,7 +58,7 @@ export function AIInsights({ companies }: AIInsightsProps) {
           },
           {
             title: "Score Médio IA",
-            value: Math.round(avgScore),
+            value: avgScore,
             trend: avgScore > 50 ? "up" : "down",
             description: "Score médio de potencial de conversão",
           },
@@ -60,15 +66,15 @@ export function AIInsights({ companies }: AIInsightsProps) {
             title: "Leads Qualificados",
             value: highScoreCompanies,
             trend: "up",
-            description: "Empresas com score acima de 70",
+            description: "Empresas com alto potencial",
           },
         ],
         recommendations: [
           {
             priority: "high",
-            title: "Priorizar Leads de Alto Score",
-            description: `${highScoreCompanies} empresas têm score acima de 70. Foque nestes leads primeiro.`,
-            action: "Ver Leads Prioritários",
+            title: "Priorizar Empresas Ativas",
+            description: `${activeCompanies} empresas estão ativas. Foque nestes leads primeiro.`,
+            action: "Ver Leads Ativos",
           },
           {
             priority: "medium",
@@ -79,7 +85,7 @@ export function AIInsights({ companies }: AIInsightsProps) {
           {
             priority: "low",
             title: "Campanhas de Reativação",
-            description: `${totalCompanies - activeCompanies} empresas inativas podem ser reativadas.`,
+            description: `${inactiveCompanies} empresas inativas podem ser reativadas.`,
             action: "Criar Campanha",
           },
         ],
@@ -108,31 +114,51 @@ export function AIInsights({ companies }: AIInsightsProps) {
   const analyzeCompany = async (company: any) => {
     setSelectedCompany(company)
     // Simulate individual company analysis
+    const score = company.situacao_cadastral === "ATIVA" ? 
+      Math.floor(Math.random() * 30) + 70 : // 70-100 for active
+      Math.floor(Math.random() * 40) + 10   // 10-50 for inactive
+      
     const analysis = {
-      score: company.ai_score || Math.floor(Math.random() * 100),
+      score,
       factors: [
         {
           name: "Situação Cadastral",
-          impact: company.situacao_cadastral?.situacao_atual === "ATIVA" ? 30 : -20,
-          positive: company.situacao_cadastral?.situacao_atual === "ATIVA",
+          impact: company.situacao_cadastral === "ATIVA" ? 30 : -20,
+          positive: company.situacao_cadastral === "ATIVA",
         },
-        { name: "Nome Fantasia", impact: company.nome_fantasia ? 10 : -5, positive: !!company.nome_fantasia },
+        { 
+          name: "Nome Fantasia", 
+          impact: company.nome_fantasia ? 10 : -5, 
+          positive: !!company.nome_fantasia 
+        },
         {
-          name: "Tipo de Empresa",
-          impact: company.razao_social?.includes("LTDA") ? 15 : 0,
-          positive: company.razao_social?.includes("LTDA"),
+          name: "Dados de Contato",
+          impact: (company.telefone ? 5 : 0) + (company.email ? 10 : 0),
+          positive: !!(company.telefone || company.email),
         },
-        { name: "Histórico", impact: Math.floor(Math.random() * 20) - 10, positive: Math.random() > 0.5 },
+        { 
+          name: "Localização", 
+          impact: company.uf && company.municipio ? 5 : -5, 
+          positive: !!(company.uf && company.municipio) 
+        },
       ],
       recommendations: [
-        "Abordar via telefone no horário comercial",
-        "Mencionar nome fantasia na apresentação",
-        "Focar em soluções para empresas do segmento",
-        "Preparar proposta personalizada",
+        company.situacao_cadastral === "ATIVA" ? 
+          "Empresa ativa - Priorizar contato" : 
+          "Empresa inativa - Verificar possibilidade de reativação",
+        company.nome_fantasia ? 
+          "Mencionar nome fantasia na apresentação" : 
+          "Usar razão social na abordagem",
+        company.telefone ? 
+          "Contato telefônico disponível" : 
+          "Buscar dados de contato adicionais",
+        "Preparar proposta personalizada para o segmento",
       ],
       bestContactTime: "14:00 - 16:00",
       estimatedValue: Math.floor(Math.random() * 50000) + 10000,
-      conversionProbability: Math.floor(Math.random() * 40) + 30,
+      conversionProbability: company.situacao_cadastral === "ATIVA" ? 
+        Math.floor(Math.random() * 40) + 40 : // 40-80% for active
+        Math.floor(Math.random() * 20) + 10,  // 10-30% for inactive
     }
 
     setSelectedCompany({ ...company, analysis })
@@ -204,8 +230,8 @@ export function AIInsights({ companies }: AIInsightsProps) {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-green-600 text-sm font-medium">Leads Qualificados</p>
-                    <p className="text-2xl font-bold text-green-900">{insights.overview.highScoreCompanies}</p>
+                    <p className="text-green-600 text-sm font-medium">Empresas Ativas</p>
+                    <p className="text-2xl font-bold text-green-900">{insights.overview.activeCompanies}</p>
                   </div>
                   <Target className="w-8 h-8 text-green-500" />
                 </div>
@@ -354,7 +380,7 @@ export function AIInsights({ companies }: AIInsightsProps) {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {companies.slice(0, 20).map((company, index) => (
+                  {leads.slice(0, 20).map((company, index) => (
                     <div
                       key={index}
                       className="p-3 rounded-lg border cursor-pointer hover:bg-slate-50 transition-colors"
@@ -365,7 +391,11 @@ export function AIInsights({ companies }: AIInsightsProps) {
                           <p className="font-medium text-slate-900">{company.razao_social}</p>
                           <p className="text-sm text-slate-600">{company.cnpj}</p>
                         </div>
-                        <Badge variant="secondary">Score: {company.ai_score || "N/A"}</Badge>
+                        <Badge 
+                          variant={company.situacao_cadastral === "ATIVA" ? "default" : "secondary"}
+                        >
+                          {company.situacao_cadastral}
+                        </Badge>
                       </div>
                     </div>
                   ))}

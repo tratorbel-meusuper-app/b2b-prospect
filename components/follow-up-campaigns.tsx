@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,20 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Send, Plus, Calendar, CheckCircle, XCircle, Clock, Play, Pause } from "lucide-react"
 
-interface Campaign {
-  id: number
-  name: string
-  message_template: string
-  status: string
-  scheduled_at: string | null
-  sent_count: number
-  delivered_count: number
-  failed_count: number
-  created_at: string
-}
-
 export function FollowUpCampaigns() {
-  const [campaigns, setCampaigns] = useState<Campaign[]>([])
+  const [campaigns, setCampaigns] = useState<any[]>([])
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [loading, setLoading] = useState(false)
 
@@ -36,22 +24,6 @@ export function FollowUpCampaigns() {
   const [scheduledTime, setScheduledTime] = useState("")
   const [selectedAudience, setSelectedAudience] = useState("")
 
-  useEffect(() => {
-    fetchCampaigns()
-  }, [])
-
-  const fetchCampaigns = async () => {
-    try {
-      const response = await fetch("/api/campaigns")
-      if (response.ok) {
-        const data = await response.json()
-        setCampaigns(data.campaigns)
-      }
-    } catch (error) {
-      console.error("Error fetching campaigns:", error)
-    }
-  }
-
   const createCampaign = async () => {
     if (!campaignName.trim() || !messageTemplate.trim()) return
 
@@ -60,22 +32,21 @@ export function FollowUpCampaigns() {
       const scheduledAt =
         scheduledDate && scheduledTime ? new Date(`${scheduledDate}T${scheduledTime}`).toISOString() : null
 
-      const response = await fetch("/api/campaigns", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: campaignName,
-          message_template: messageTemplate,
-          scheduled_at: scheduledAt,
-          audience_id: selectedAudience || null,
-        }),
-      })
-
-      if (response.ok) {
-        await fetchCampaigns()
-        setIsCreateModalOpen(false)
-        resetForm()
+      const newCampaign = {
+        id: Date.now(),
+        name: campaignName,
+        message_template: messageTemplate,
+        scheduled_at: scheduledAt,
+        status: 'draft',
+        sent_count: 0,
+        delivered_count: 0,
+        failed_count: 0,
+        created_at: new Date().toISOString(),
       }
+
+      setCampaigns(prev => [...prev, newCampaign])
+      setIsCreateModalOpen(false)
+      resetForm()
     } catch (error) {
       console.error("Error creating campaign:", error)
     } finally {
@@ -84,31 +55,15 @@ export function FollowUpCampaigns() {
   }
 
   const startCampaign = async (campaignId: number) => {
-    try {
-      const response = await fetch(`/api/campaigns/${campaignId}/start`, {
-        method: "POST",
-      })
-
-      if (response.ok) {
-        await fetchCampaigns()
-      }
-    } catch (error) {
-      console.error("Error starting campaign:", error)
-    }
+    setCampaigns(prev => prev.map(c => 
+      c.id === campaignId ? { ...c, status: 'active' } : c
+    ))
   }
 
   const pauseCampaign = async (campaignId: number) => {
-    try {
-      const response = await fetch(`/api/campaigns/${campaignId}/pause`, {
-        method: "POST",
-      })
-
-      if (response.ok) {
-        await fetchCampaigns()
-      }
-    } catch (error) {
-      console.error("Error pausing campaign:", error)
-    }
+    setCampaigns(prev => prev.map(c => 
+      c.id === campaignId ? { ...c, status: 'paused' } : c
+    ))
   }
 
   const resetForm = () => {
@@ -193,7 +148,6 @@ export function FollowUpCampaigns() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todos os leads</SelectItem>
-                      <SelectItem value="high-score">Score Alto (70+)</SelectItem>
                       <SelectItem value="active">Empresas Ativas</SelectItem>
                       <SelectItem value="tech">Tecnologia</SelectItem>
                     </SelectContent>
@@ -208,11 +162,11 @@ export function FollowUpCampaigns() {
                     id="messageTemplate"
                     value={messageTemplate}
                     onChange={(e) => setMessageTemplate(e.target.value)}
-                    placeholder="Olá {{nome_empresa}}, 
+                    placeholder="Olá {{razao_social}}, 
 
 Espero que esteja tudo bem! Sou {{seu_nome}} da {{sua_empresa}}.
 
-Notei que sua empresa {{nome_empresa}} atua no segmento de {{segmento}} e acredito que podemos ajudar com nossas soluções.
+Notei que sua empresa {{razao_social}} atua no segmento e acredito que podemos ajudar com nossas soluções.
 
 Gostaria de agendar uma conversa rápida de 15 minutos para apresentar como podemos otimizar seus processos?
 
@@ -224,7 +178,7 @@ Atenciosamente,
                     className="font-mono text-sm"
                   />
                   <p className="text-xs text-slate-500 mt-2">
-                    Use variáveis como: {`{{nome_empresa}}, {{cnpj}}, {{nome_fantasia}}, {{seu_nome}}, {{sua_empresa}}`}
+                    Use variáveis como: {`{{razao_social}}, {{cnpj}}, {{nome_fantasia}}, {{seu_nome}}, {{sua_empresa}}`}
                   </p>
                 </div>
               </TabsContent>

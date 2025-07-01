@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,22 +10,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tag, Plus, Edit, Trash2, Users } from "lucide-react"
 
 interface TagsManagerProps {
-  selectedCompanies: string[]
-  onTagsUpdated: () => void
+  selectedCompanies?: string[]
+  onTagsUpdated?: () => void
 }
 
-interface TagType {
-  id: number
-  name: string
-  color: string
-  description: string
-  company_count: number
-}
-
-export function TagsManager({ selectedCompanies, onTagsUpdated }: TagsManagerProps) {
-  const [tags, setTags] = useState<TagType[]>([])
+export function TagsManager({ selectedCompanies = [], onTagsUpdated }: TagsManagerProps) {
+  const [tags, setTags] = useState<any[]>([])
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
-  const [editingTag, setEditingTag] = useState<TagType | null>(null)
+  const [editingTag, setEditingTag] = useState<any>(null)
   const [loading, setLoading] = useState(false)
 
   // Form states
@@ -33,42 +25,23 @@ export function TagsManager({ selectedCompanies, onTagsUpdated }: TagsManagerPro
   const [tagColor, setTagColor] = useState("#3B82F6")
   const [tagDescription, setTagDescription] = useState("")
 
-  useEffect(() => {
-    fetchTags()
-  }, [])
-
-  const fetchTags = async () => {
-    try {
-      const response = await fetch("/api/tags")
-      if (response.ok) {
-        const data = await response.json()
-        setTags(data.tags)
-      }
-    } catch (error) {
-      console.error("Error fetching tags:", error)
-    }
-  }
-
   const createTag = async () => {
     if (!tagName.trim()) return
 
     setLoading(true)
     try {
-      const response = await fetch("/api/tags", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: tagName,
-          color: tagColor,
-          description: tagDescription,
-        }),
-      })
-
-      if (response.ok) {
-        await fetchTags()
-        setIsCreateModalOpen(false)
-        resetForm()
+      const newTag = {
+        id: Date.now(),
+        name: tagName,
+        color: tagColor,
+        description: tagDescription,
+        company_count: 0,
+        created_at: new Date().toISOString(),
       }
+
+      setTags(prev => [...prev, newTag])
+      setIsCreateModalOpen(false)
+      resetForm()
     } catch (error) {
       console.error("Error creating tag:", error)
     } finally {
@@ -81,21 +54,13 @@ export function TagsManager({ selectedCompanies, onTagsUpdated }: TagsManagerPro
 
     setLoading(true)
     try {
-      const response = await fetch(`/api/tags/${editingTag.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: tagName,
-          color: tagColor,
-          description: tagDescription,
-        }),
-      })
-
-      if (response.ok) {
-        await fetchTags()
-        setEditingTag(null)
-        resetForm()
-      }
+      setTags(prev => prev.map(tag => 
+        tag.id === editingTag.id 
+          ? { ...tag, name: tagName, color: tagColor, description: tagDescription }
+          : tag
+      ))
+      setEditingTag(null)
+      resetForm()
     } catch (error) {
       console.error("Error updating tag:", error)
     } finally {
@@ -106,17 +71,7 @@ export function TagsManager({ selectedCompanies, onTagsUpdated }: TagsManagerPro
   const deleteTag = async (tagId: number) => {
     if (!confirm("Tem certeza que deseja excluir esta etiqueta?")) return
 
-    try {
-      const response = await fetch(`/api/tags/${tagId}`, {
-        method: "DELETE",
-      })
-
-      if (response.ok) {
-        await fetchTags()
-      }
-    } catch (error) {
-      console.error("Error deleting tag:", error)
-    }
+    setTags(prev => prev.filter(tag => tag.id !== tagId))
   }
 
   const applyTagToSelected = async (tagId: number) => {
@@ -127,20 +82,15 @@ export function TagsManager({ selectedCompanies, onTagsUpdated }: TagsManagerPro
 
     setLoading(true)
     try {
-      const response = await fetch("/api/companies/apply-tags", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          company_cnpjs: selectedCompanies,
-          tag_id: tagId,
-        }),
-      })
-
-      if (response.ok) {
-        await fetchTags()
-        onTagsUpdated()
-        alert(`Etiqueta aplicada a ${selectedCompanies.length} empresa(s)`)
-      }
+      // Simulate applying tag
+      setTags(prev => prev.map(tag => 
+        tag.id === tagId 
+          ? { ...tag, company_count: tag.company_count + selectedCompanies.length }
+          : tag
+      ))
+      
+      onTagsUpdated?.()
+      alert(`Etiqueta aplicada a ${selectedCompanies.length} empresa(s)`)
     } catch (error) {
       console.error("Error applying tag:", error)
     } finally {
@@ -154,7 +104,7 @@ export function TagsManager({ selectedCompanies, onTagsUpdated }: TagsManagerPro
     setTagDescription("")
   }
 
-  const openEditModal = (tag: TagType) => {
+  const openEditModal = (tag: any) => {
     setEditingTag(tag)
     setTagName(tag.name)
     setTagColor(tag.color)
@@ -391,8 +341,8 @@ export function TagsManager({ selectedCompanies, onTagsUpdated }: TagsManagerPro
               <Plus className="w-4 h-4 mr-2" />
               Criar Primeira Etiqueta
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </CardContent>
       )}
     </div>
   )
